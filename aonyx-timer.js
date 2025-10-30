@@ -85,11 +85,23 @@
   `;
   document.body.appendChild(wrap);
 
-  $('#ax_close').onclick=()=>wrap.remove();
-  $('#ax_toggle').onclick=()=>{
-    const b=$('#ax_body'); const show=b.style.display==='none'; b.style.display=show?'block':'none'; save('collapsed', show);
+// Warte kurz, bis DOM steht, dann Buttons aktivieren
+setTimeout(() => {
+  const closeBtn = document.getElementById('ax_close');
+  const toggleBtn = document.getElementById('ax_toggle');
+  const body = document.getElementById('ax_body');
+  if (!closeBtn || !toggleBtn || !body) return console.warn('[Aonyx] UI-Elemente noch nicht da.');
+
+  closeBtn.onclick = () => wrap.remove();
+  toggleBtn.onclick = () => {
+    const show = body.style.display === 'none';
+    body.style.display = show ? 'block' : 'none';
+    save('collapsed', show);
   };
-  $('#ax_body').style.display = load('collapsed', true) ? 'none' : 'block';
+
+  // Startzustand: offen
+  body.style.display = load('collapsed', false) ? 'none' : 'block';
+}, 200);
 
   const targetIn=$('#ax_target');
   const timeIn=$('#ax_time');
@@ -344,3 +356,4 @@
   })();
 
 })();
+
