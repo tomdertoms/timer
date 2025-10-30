@@ -230,5 +230,9 @@ requestAnimationFrame(() => {
   $('#ax_refresh').onclick=async()=>{const coord=($('#ax_target').value||'').trim();if(!coord)return UI.ErrorMessage('Kein Ziel');const m=coord.match(/^(\\d{1,3})\\|(\\d{1,3})$/);if(!m)return UI.ErrorMessage('Ziel kaputt');const tx=+m[1],ty=+m[2];const vills=load('vills',[]);if(!vills.length)return UI.ErrorMessage('Keine Dörfer geladen');const units=availableUnits();for(const v of vills){for(const u of units){const cell=$(`ax_time_${v.id}_${u}`);if(cell)cell.textContent='…';const ms=await calcDurationMs(v.id,u,tx,ty);if(cell)cell.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';await new Promise(r=>setTimeout(r,60));}}try{UI.SuccessMessage('Laufzeiten aktualisiert');}catch(_){}};  
   $('#ax_go').onclick=()=>{const coord=($('#ax_target').value||'').trim();if(!coord)return UI.ErrorMessage('Kein Ziel');const m=coord.match(/^(\\d{1,3})\\|(\\d{1,3})$/);if(!m)return UI.ErrorMessage('Ziel kaputt');const tx=+m[1],ty=+m[2];const mode=document.querySelector('input[name="ax_mode"]:checked')?.value||'attack';const vills=load('vills',[]);const units=availableUnits();for(const v of vills){const set=load('amounts',{})[v.id]||{};const payload={};for(const u of units){const n=+set[u]||0;if(n>0)payload[u]=n;}if(Object.keys(payload).length){sendCommand(v.id,tx,ty,mode,payload);return;}}UI.ErrorMessage('Keine Mengen gesetzt');};
 
-  (function init(){if(!load('time',null))save
+(function init(){
+  if (!load('time', null)) save('time', fmtHMSms(new Date()));
+  try { UI.SuccessMessage('Aonyx Timer bereit.'); } catch(_) {}
+})();
+})();
 
