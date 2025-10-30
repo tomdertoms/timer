@@ -1,12 +1,12 @@
-// 🦦 Aonyx Timer v4.0 – Dialogmodus (funktioniert in-game, wie FarmGod)
+// 🦦 Aonyx Timer v4.1 — smarter village resolver
 (function(){
   'use strict';
   if (!window.TribalWars || !window.game_data) {
-    alert('Aonyx Timer: Bitte im Spiel ausführen.');
+    alert('Aonyx Timer: Bitte im Spiel ausführen (z.B. Karte, Versammlungsplatz, Farm-Assistent).');
     return;
   }
 
-  const LS='aonyx_timer_v40_';
+  const LS='aonyx_timer_v41_';
   const pad2=n=>String(n).padStart(2,'0');
   const pad3=n=>String(n).padStart(3,'0');
   const fmtHMSms=d=>`${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}.${pad3(d.getMilliseconds())}`;
@@ -26,7 +26,6 @@
     ram:'Ramme', catapult:'Katapult', knight:'Paladin'
   };
 
-  // === Container wie FarmGod ===
   const root=document.querySelector('#content_value')||document.body;
   const existing=document.getElementById('aonyx_timer_dialog');if(existing)existing.remove();
 
@@ -70,7 +69,6 @@
   targetIn.addEventListener('input',()=>save('target',targetIn.value));
   timeIn.addEventListener('input',()=>save('time',timeIn.value));
 
-  // Countdown
   setInterval(()=>{
     const t=parseTime(timeIn.value), cd=$('ax_count');
     if(!t||!cd)return;
@@ -79,17 +77,23 @@
     cd.textContent=`Countdown: ${m>0?m+'m ':''}${s}.${String(ms%1000).padStart(3,'0')}s`;
   },60);
 
-  // ===== Core Funktionen =====
+  // === FIX: robustes Dorf-Laden
   function getVillages(){
-    if(window.TWMap?.villages){
-      return Object.values(TWMap.villages).map(v=>({id:v.id,name:v.name,x:v.x,y:v.y}));
-    }else if(game_data.player?.villages){
-      const vmap=game_data.player.villages;
-      return Object.keys(vmap).map(id=>({id,name:vmap[id].name,x:vmap[id].x,y:vmap[id].y}));
-    }else{
-      const v=game_data.village;
-      return [{id:v.id,name:v.name,x:v.x,y:v.y}];
-    }
+    try {
+      if (window.TWMap?.villages) {
+        return Object.values(TWMap.villages).map(v=>({id:v.id,name:v.name,x:v.x,y:v.y}));
+      }
+      if (game_data.player?.villages) {
+        const vmap=game_data.player.villages;
+        return Object.keys(vmap).map(id=>({id,name:vmap[id].name,x:vmap[id].x,y:vmap[id].y}));
+      }
+      if (window.Accountmanager?.farm?.villages) {
+        return Object.values(Accountmanager.farm.villages)
+          .map(v=>({id:v.id||v.village_id,name:v.name||v.village_name,x:v.x||v.village_x,y:v.y||v.village_y}));
+      }
+    } catch(e){console.warn('Aonyx getVillages fallback',e);}
+    const v=game_data.village;
+    return [{id:v.id,name:v.name,x:v.x,y:v.y}];
   }
 
   function calcTravel(unit,fx,fy,tx,ty){
@@ -119,7 +123,7 @@
     const units=Object.keys(game_data.units_data||{});
     let html='<table class="vis" style="width:100%;border-collapse:collapse"><thead><tr><th>Dorf</th><th>Einheit</th><th>Laufzeit</th><th>Menge</th></tr></thead><tbody>';
     for(const v of villages){
-      html+=`<tr><td colspan="4" style="background:#f7f7f7"><b>${v.name}</b> (${v.x}|${v.y})</td></tr>`;
+      html+=`<tr><td colspan="4" style="background:#f7f7f7"><b>${v.name||'unbekannt'}</b> (${v.x||'?'}|${v.y||'?'})</td></tr>`;
       for(const u of units){
         html+=`<tr><td>${UNIT_LABEL[u]||u}</td><td>${u}</td><td id="ax_t_${v.id}_${u}">-</td>
           <td><input class="ax_amt" data-vid="${v.id}" data-unit="${u}" style="width:60px" value="${load('amounts',{})?.[v.id]?.[u]||0}"></td></tr>`;
