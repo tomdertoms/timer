@@ -1,6 +1,4 @@
-// 🦦 Aonyx Timer v3.3 — Frame-fix Edition
-// hängt sich in das Spiel-Frame ein, funktioniert auf Karte & Versammlungsplatz
-
+// 🦦 Aonyx Timer v3.4 — content_value aware edition
 (function(){
   'use strict';
   if (!window.TribalWars || !window.game_data) {
@@ -8,7 +6,7 @@
     return;
   }
 
-  const LS = 'aonyx_timer_v33_';
+  const LS = 'aonyx_timer_v34_';
   const pad2=n=>String(n).padStart(2,'0');
   const pad3=n=>String(n).padStart(3,'0');
   const fmtHMSms=d=>`${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}.${pad3(d.getMilliseconds())}`;
@@ -19,7 +17,6 @@
     if(h.length===1)h='0'+h;if(m&&m.length===1)m='0'+m;if(s&&s.length===1)s='0'+s;
     let o='';if(h)o+=h;if(m)o+=':'+m;if(s)o+=':'+s;if(ms)o+='.'+ms;i.value=o;});
     i.addEventListener('blur',()=>{const d=parseTime(i.value);i.value=d?fmtHMSms(d):'';});};
-
   const save=(k,v)=>localStorage.setItem(LS+k,JSON.stringify(v));
   const load=(k,d=null)=>{try{const s=localStorage.getItem(LS+k);return s?JSON.parse(s):d;}catch(_){return d;}};
 
@@ -29,12 +26,14 @@
     ram:'Ramme', catapult:'Katapult', knight:'Paladin'
   };
 
-  const frame = window.frames.main || window;
-  const doc = (frame.document || document);
+  // find best insertion target
+  let root = document.querySelector('#content_value') ||
+             document.querySelector('#ds_body') ||
+             document.body;
+  if (!root) root = document.body;
 
-  function $(id){ return doc.getElementById(id); }
-
-  const wrap = doc.createElement('div');
+  // build panel
+  const wrap = document.createElement('div');
   wrap.id = 'aonyx_timer_panel';
   Object.assign(wrap.style,{
     position:'fixed',top:'70px',right:'16px',zIndex:999999,
@@ -44,7 +43,7 @@
   });
   wrap.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ccc;padding-bottom:6px">
-      <b>🦦 Aonyx Timer v3.3</b>
+      <b>🦦 Aonyx Timer v3.4</b>
       <button id="ax_close" style="background:#fdd;border:1px solid #a33;border-radius:6px;padding:2px 6px">X</button>
     </div>
     <div style="margin-top:8px">
@@ -61,32 +60,22 @@
       <button id="ax_go" style="background:#2b7aea;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:bold">GO (dein Klick)</button>
     </div>
   `;
-  doc.body.appendChild(wrap);
+  root.appendChild(wrap);
 
-  // === Jetzt wirklich initialisieren ===
-  function initUI(attempt=1){
-    const closeBtn = $('#ax_close');
-    const targetIn = $('#ax_target');
-    const timeIn   = $('#ax_time');
-    const loadBtn  = $('#ax_load');
-    const calcBtn  = $('#ax_calc');
-    const goBtn    = $('#ax_go');
-    const tableDiv = $('#ax_table');
+  // init after small delay so DOM paint finishes
+  setTimeout(initUI,150);
 
-    if (!closeBtn || !loadBtn || !calcBtn || !goBtn) {
-      if (attempt < 10) {
-        console.warn(`[Aonyx] Frame UI noch nicht bereit (${attempt})`);
-        return setTimeout(()=>initUI(attempt+1),200);
-      } else {
-        console.error('[Aonyx] UI konnte nicht initialisiert werden.');
-        return;
-      }
-    }
+  function $(id){ return document.getElementById(id); }
 
-    // === UI ready ===
-    closeBtn.onclick = ()=>wrap.remove();
-    targetIn.value = load('target','');
-    timeIn.value = load('time',fmtHMSms(new Date()));
+  function initUI(){
+    const closeBtn=$('#ax_close'), targetIn=$('#ax_target'), timeIn=$('#ax_time'),
+          loadBtn=$('#ax_load'), calcBtn=$('#ax_calc'), goBtn=$('#ax_go'), tableDiv=$('#ax_table');
+
+    if(!closeBtn||!loadBtn||!calcBtn||!goBtn){ console.error('Aonyx UI nicht gefunden.'); return; }
+
+    closeBtn.onclick=()=>wrap.remove();
+    targetIn.value=load('target','');
+    timeIn.value=load('time',fmtHMSms(new Date()));
     timeMask(timeIn);
 
     targetIn.addEventListener('input',()=>save('target',targetIn.value));
@@ -101,25 +90,25 @@
     },60);
 
     let villages=[];
-    loadBtn.onclick = ()=>{
-      villages = getVillages();
-      if(!villages.length) return UI.ErrorMessage('Keine Dörfer gefunden');
+    loadBtn.onclick=()=>{
+      villages=getVillages();
+      if(!villages.length)return UI.ErrorMessage('Keine Dörfer gefunden');
       UI.SuccessMessage(`${villages.length} Dörfer geladen`);
       buildTable();
     };
 
     function getVillages(){
       let list=[];
-      if (window.TWMap?.villages) {
-        list = Object.values(TWMap.villages).map(v=>({id:v.id,name:v.name,x:v.x,y:v.y}));
-      } else if (game_data.player?.villages) {
-        const vmap = game_data.player.villages;
-        list = Object.keys(vmap).map(id=>({id,name:vmap[id].name,x:vmap[id].x,y:vmap[id].y}));
-      } else list=[{id:game_data.village.id,name:game_data.village.name,x:game_data.village.x,y:game_data.village.y}];
+      if(window.TWMap?.villages){
+        list=Object.values(TWMap.villages).map(v=>({id:v.id,name:v.name,x:v.x,y:v.y}));
+      }else if(game_data.player?.villages){
+        const vmap=game_data.player.villages;
+        list=Object.keys(vmap).map(id=>({id,name:vmap[id].name,x:vmap[id].x,y:vmap[id].y}));
+      }else list=[{id:game_data.village.id,name:game_data.village.name,x:game_data.village.x,y:game_data.village.y}];
       return list;
     }
 
-    function calcTravel(unit, fx,fy, tx,ty){
+    function calcTravel(unit,fx,fy,tx,ty){
       const ud=game_data.units_data?.[unit];
       if(!ud)return null;
       const dist=Math.hypot(fx-tx,fy-ty);
@@ -128,7 +117,7 @@
     }
 
     function buildTable(){
-      const units = Object.keys(game_data.units_data||{});
+      const units=Object.keys(game_data.units_data||{});
       let html='<table class="vis" style="width:100%;border-collapse:collapse"><thead><tr><th>Dorf</th><th>Einheit</th><th>Laufzeit</th><th>Menge</th></tr></thead><tbody>';
       for(const v of villages){
         html+=`<tr><td colspan="4" style="background:#f7f7f7"><b>${v.name}</b> (${v.x}|${v.y})</td></tr>`;
@@ -138,12 +127,11 @@
         }
       }
       html+='</tbody></table>';
-      tableDiv.innerHTML = html;
+      tableDiv.innerHTML=html;
     }
 
     calcBtn.onclick=()=>{
-      const coord=(targetIn.value||'').trim();
-      const m=coord.match(/^(\d{1,3})\|(\d{1,3})$/);
+      const coord=(targetIn.value||'').trim(), m=coord.match(/^(\d{1,3})\|(\d{1,3})$/);
       if(!m)return UI.ErrorMessage('Ungültiges Ziel');
       const tx=+m[1],ty=+m[2];
       for(const v of villages){
@@ -157,13 +145,7 @@
       UI.SuccessMessage('Laufzeiten berechnet');
     };
 
-    goBtn.onclick=()=>{
-      UI.SuccessMessage('GO gedrückt – Simulation aktiv');
-    };
-
-    UI.SuccessMessage('Aonyx Timer aktiv im Frame');
+    goBtn.onclick=()=>UI.SuccessMessage('GO gedrückt – Simulation aktiv');
+    UI.SuccessMessage('Aonyx Timer aktiv');
   }
-
-  setTimeout(()=>initUI(),200);
-
 })();
