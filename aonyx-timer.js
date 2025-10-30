@@ -1,5 +1,5 @@
-// Aonyx Timer v2.5
-// Wenn du das liest, läuft’s. Wenn nicht, klick weniger.
+// Aonyx Timer v2.6
+// Wenn du das liest, läuft’s. Wenn nicht, ist das Problem vor dem Bildschirm.
 // Credits: basiert auf Routinen von PornoPommes, aufgeräumt & verschärft von dir.
 
 (function(){
@@ -11,7 +11,7 @@
   }
 
   /* ===== Helfer ===== */
-  const LS = 'aonyx_timer_v25_';
+  const LS = 'aonyx_timer_v26_';
   const $ = (id)=>document.getElementById(id);
   const save = (k,v)=>localStorage.setItem(LS+k, JSON.stringify(v));
   const load = (k,d=null)=>{ try{const s=localStorage.getItem(LS+k); return s?JSON.parse(s):d;}catch(_){return d;} };
@@ -67,61 +67,58 @@
       </div>
     </div>
   `;
-// Panel anhängen, dann sicherstellen, dass DOM-Elemente existieren
-document.body.appendChild(wrap);
+  document.body.appendChild(wrap);
 
-requestAnimationFrame(() => {
-  const closeBtn = document.getElementById('ax_close');
-  const targetIn = document.getElementById('ax_target');
-  const timeIn = document.getElementById('ax_time');
+  /* ===== Init UI ===== */
+  requestAnimationFrame(() => {
+    const closeBtn = document.getElementById('ax_close');
+    const targetIn = document.getElementById('ax_target');
+    const timeIn = document.getElementById('ax_time');
 
-  if (!closeBtn || !targetIn || !timeIn) {
-    console.warn('[Aonyx] UI-Elemente fehlen – Timer konnte nicht initialisiert werden.');
-    return;
-  }
-
-  closeBtn.onclick = () => wrap.remove();
-
-  targetIn.value = load('target', '');
-  timeIn.value = load('time', fmtHMSms(new Date()));
-  timeMask(timeIn);
-
-  targetIn.addEventListener('input', () => save('target', targetIn.value));
-  timeIn.addEventListener('input', () => save('time', timeIn.value));
-
-  document.querySelectorAll('input[name="ax_mode"]').forEach(r => 
-    r.addEventListener('change', () => 
-      save('mode', document.querySelector('input[name="ax_mode"]:checked').value)
-    )
-  );
-
-  // Klick auf Karte = Ziel übernehmen
-  try {
-    if (window.TWMap && typeof TWMap.on === 'function') {
-      TWMap.on('click', e => {
-        if (e?.coords) {
-          targetIn.value = `${e.coords.x}|${e.coords.y}`;
-          save('target', targetIn.value);
-        }
-      });
+    if (!closeBtn || !targetIn || !timeIn) {
+      console.warn('[Aonyx] UI-Elemente fehlen – Timer konnte nicht initialisiert werden.');
+      return;
     }
-  } catch (_) {}
 
-  // Countdown
-  setInterval(() => {
-    const t = parseTime(timeIn.value);
-    const cd = document.getElementById('ax_countdown');
-    if (!t || !cd) return;
-    const ms = Math.max(0, t.getTime() - Date.now());
-    const sec = Math.floor(ms / 1000) % 60;
-    const min = Math.floor(ms / 60000);
-    const rem = String(ms % 1000).padStart(3, '0');
-    cd.textContent = `Countdown: ${min > 0 ? min + 'm ' : ''}${sec}.${rem}s`;
-  }, 60);
+    closeBtn.onclick = () => wrap.remove();
 
-  try { UI.SuccessMessage('Aonyx Timer aktiv.'); } catch (_) {}
-});
+    targetIn.value = load('target', '');
+    timeIn.value = load('time', fmtHMSms(new Date()));
+    timeMask(timeIn);
 
+    targetIn.addEventListener('input', () => save('target', targetIn.value));
+    timeIn.addEventListener('input', () => save('time', timeIn.value));
+
+    document.querySelectorAll('input[name="ax_mode"]').forEach(r =>
+      r.addEventListener('change', () =>
+        save('mode', document.querySelector('input[name="ax_mode"]:checked').value)
+      )
+    );
+
+    try {
+      if (window.TWMap && typeof TWMap.on === 'function') {
+        TWMap.on('click', e => {
+          if (e?.coords) {
+            targetIn.value = `${e.coords.x}|${e.coords.y}`;
+            save('target', targetIn.value);
+          }
+        });
+      }
+    } catch (_) {}
+
+    setInterval(() => {
+      const t = parseTime(timeIn.value);
+      const cd = document.getElementById('ax_countdown');
+      if (!t || !cd) return;
+      const ms = Math.max(0, t.getTime() - Date.now());
+      const sec = Math.floor(ms / 1000) % 60;
+      const min = Math.floor(ms / 60000);
+      const rem = String(ms % 1000).padStart(3, '0');
+      cd.textContent = `Countdown: ${min > 0 ? min + 'm ' : ''}${sec}.${rem}s`;
+    }, 60);
+
+    try { UI.SuccessMessage('Aonyx Timer aktiv.'); } catch (_) {}
+  });
 
   /* ===== Backend ===== */
   function loadVillages(){
@@ -138,9 +135,9 @@ requestAnimationFrame(() => {
           try{
             const doc=document.implementation.createHTMLDocument('v');doc.documentElement.innerHTML=html;
             const links=Array.from(doc.querySelectorAll('a[href*="village="]'));const seen=new Set(),v=[];
-            links.forEach(a=>{const m=(a.getAttribute('href')||'').match(/village=(\d+)/);if(m&&!seen.has(m[1])){seen.add(m[1]);v.push({id:m[1],name:a.textContent.trim(),x:0,y:0});}});
+            links.forEach(a=>{const m=(a.getAttribute('href')||'').match(/village=(\\d+)/);if(m&&!seen.has(m[1])){seen.add(m[1]);v.push({id:m[1],name:a.textContent.trim(),x:0,y:0});}});
             jQuery.get(location.origin+'/map/village.txt',function(txt){
-              const idx=new Map();String(txt).split('\n').forEach(line=>{const[id,x,y]=line.split(',');if(id&&x&&y)idx.set(String(id),{x:+x,y:+y});});
+              const idx=new Map();String(txt).split('\\n').forEach(line=>{const[id,x,y]=line.split(',');if(id&&x&&y)idx.set(String(id),{x:+x,y:+y});});
               const withCoords=v.map(vv=>idx.has(vv.id)?Object.assign(vv,idx.get(vv.id)):vv);save('vills',withCoords);resolve(withCoords);
             }).fail(()=>{save('vills',v);resolve(v);});
           }catch(e){save('vills',[]);resolve([]);}
@@ -157,7 +154,7 @@ requestAnimationFrame(() => {
           TribalWars.get('game.php',{screen:'place',village:vid},function(html){
             try{
               const doc=document.implementation.createHTMLDocument('p');doc.documentElement.innerHTML=html;
-              const out={};availableUnits().forEach(u=>{const s=doc.querySelector(`#units_entry_all_${u},#units_entry_${u},span[id*="units_entry"][id*="${u}"]`);if(s){const m=s.textContent.replace(/\./g,'').match(/(\d+)/);if(m)out[u]=+m[1];}});
+              const out={};availableUnits().forEach(u=>{const s=doc.querySelector('#units_entry_all_'+u+',#units_entry_'+u+',span[id*=\"units_entry\"][id*=\"'+u+'\"]');if(s){const m=s.textContent.replace(/\\./g,'').match(/(\\d+)/);if(m)out[u]=+m[1];}});
               resolve(out);
             }catch(e){resolve({});}
           });
@@ -189,15 +186,15 @@ requestAnimationFrame(() => {
     });
   }
 
-  /* ===== Tabelle ===== */
+  /* ===== Tabelle / Events ===== */
   function buildTable(vills){
     const w=$('#ax_table_wrap');const units=availableUnits();
-    let html='<table class="vis" style="width:100%;border-collapse:collapse"><thead><tr><th>Dorf</th><th>Einheit</th><th>Verfügbar</th><th>Laufzeit</th><th>Senden</th><th>Aktion</th></tr></thead><tbody>';
+    let html='<table class=\"vis\" style=\"width:100%;border-collapse:collapse\"><thead><tr><th>Dorf</th><th>Einheit</th><th>Verfügbar</th><th>Laufzeit</th><th>Senden</th><th>Aktion</th></tr></thead><tbody>';
     for(const v of vills){
-      html+=`<tr><td colspan="6" style="background:#f7f7f7;padding:6px"><b>${v.name}</b> (${v.x}|${v.y}) (id:${v.id}) <button class="ax_chk btn" data-vid="${v.id}" style="margin-left:8px">Units prüfen</button></td></tr>`;
+      html+=`<tr><td colspan=\"6\" style=\"background:#f7f7f7;padding:6px\"><b>${v.name}</b> (${v.x}|${v.y}) (id:${v.id}) <button class=\"ax_chk btn\" data-vid=\"${v.id}\" style=\"margin-left:8px\">Units prüfen</button></td></tr>`;
       for(const u of units){
         const avail=load('avail',{})?.[v.id]?.[u]??'—';const amt=load('amounts',{})?.[v.id]?.[u]??0;
-        html+=`<tr><td>${UNIT_LABEL[u]||u}</td><td>${u}</td><td><span id="ax_av_${v.id}_${u}">${avail}</span></td><td id="ax_time_${v.id}_${u}">-</td><td><input class="ax_amt" data-vid="${v.id}" data-unit="${u}" value="${amt}" style="width:70px"></td><td><button class="ax_calc btn" data-vid="${v.id}" data-unit="${u}">calc</button></td></tr>`;
+        html+=`<tr><td>${UNIT_LABEL[u]||u}</td><td>${u}</td><td><span id=\"ax_av_${v.id}_${u}\">${avail}</span></td><td id=\"ax_time_${v.id}_${u}\">-</td><td><input class=\"ax_amt\" data-vid=\"${v.id}\" data-unit=\"${u}\" value=\"${amt}\" style=\"width:70px\"></td><td><button class=\"ax_calc btn\" data-vid=\"${v.id}\" data-unit=\"${u}\">calc</button></td></tr>`;
       }
     }
     html+='</tbody></table>';w.innerHTML=html;
@@ -206,7 +203,7 @@ requestAnimationFrame(() => {
       btn.addEventListener('click',async()=>{
         const vid=btn.dataset.vid;try{UI.SuccessMessage('Units…');}catch(_){}const units=await loadUnitsForVillage(vid);
         const map=load('avail',{});map[vid]=Object.assign(map[vid]||{},units||{});save('avail',map);
-        Object.entries(units||{}).forEach(([k,v])=>{const sp=$(`ax_av_${vid}_${k}`);if(sp)sp.textContent=v;});
+        Object.entries(units||{}).forEach(([k,v])=>{const sp=$('ax_av_'+vid+'_'+k);if(sp)sp.textContent=v;});
       });
     });
 
@@ -214,7 +211,7 @@ requestAnimationFrame(() => {
       btn.addEventListener('click',async()=>{
         const vid=btn.dataset.vid,unit=btn.dataset.unit;const coord=($('#ax_target').value||'').trim();
         if(!coord)return UI.ErrorMessage('Kein Ziel');const m=coord.match(/^(\\d{1,3})\\|(\\d{1,3})$/);if(!m)return UI.ErrorMessage('Ziel kaputt');
-        const tx=+m[1],ty=+m[2];const cell=$(`ax_time_${vid}_${unit}`);if(cell)cell.textContent='…';
+        const tx=+m[1],ty=+m[2];const cell=$('ax_time_'+vid+'_'+unit);if(cell)cell.textContent='…';
         const ms=await calcDurationMs(vid,unit,tx,ty);cell.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';
         const tgt=parseTime($('#ax_time').value);const ok=(tgt&&ms)?(tgt.getTime()-ms>Date.now()):null;
         cell.style.color=ok==null?'#333':(ok?'#078a07':'#c33');
@@ -227,12 +224,5 @@ requestAnimationFrame(() => {
   }
 
   $('#ax_load_vills').onclick=async()=>{const v=await loadVillages();if(!v||!v.length){try{UI.ErrorMessage('Keine Dörfer.');}catch(_){}return;}try{UI.SuccessMessage('Dörfer geladen');}catch(_){}buildTable(v);};
-  $('#ax_refresh').onclick=async()=>{const coord=($('#ax_target').value||'').trim();if(!coord)return UI.ErrorMessage('Kein Ziel');const m=coord.match(/^(\\d{1,3})\\|(\\d{1,3})$/);if(!m)return UI.ErrorMessage('Ziel kaputt');const tx=+m[1],ty=+m[2];const vills=load('vills',[]);if(!vills.length)return UI.ErrorMessage('Keine Dörfer geladen');const units=availableUnits();for(const v of vills){for(const u of units){const cell=$(`ax_time_${v.id}_${u}`);if(cell)cell.textContent='…';const ms=await calcDurationMs(v.id,u,tx,ty);if(cell)cell.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';await new Promise(r=>setTimeout(r,60));}}try{UI.SuccessMessage('Laufzeiten aktualisiert');}catch(_){}};  
-  $('#ax_go').onclick=()=>{const coord=($('#ax_target').value||'').trim();if(!coord)return UI.ErrorMessage('Kein Ziel');const m=coord.match(/^(\\d{1,3})\\|(\\d{1,3})$/);if(!m)return UI.ErrorMessage('Ziel kaputt');const tx=+m[1],ty=+m[2];const mode=document.querySelector('input[name="ax_mode"]:checked')?.value||'attack';const vills=load('vills',[]);const units=availableUnits();for(const v of vills){const set=load('amounts',{})[v.id]||{};const payload={};for(const u of units){const n=+set[u]||0;if(n>0)payload[u]=n;}if(Object.keys(payload).length){sendCommand(v.id,tx,ty,mode,payload);return;}}UI.ErrorMessage('Keine Mengen gesetzt');};
-
-(function init(){
-  if (!load('time', null)) save('time', fmtHMSms(new Date()));
-  try { UI.SuccessMessage('Aonyx Timer bereit.'); } catch(_) {}
-})();
-})();
-
+  $('#ax_refresh').onclick=async()=>{const coord=($('#ax_target').value||'').trim();if(!coord)return UI.ErrorMessage('Kein Ziel');const m=coord.match(/^(\\d{1,3})\\|(\\d{1,3})$/);if(!m)return UI.ErrorMessage('Ziel kaputt');const tx=+m[1],ty=+m[2];const vills=load('vills',[]);if(!vills.length)return UI.ErrorMessage('Keine Dörfer geladen');const units=availableUnits();for(const v of vills){for(const u of units){const cell=$('ax_time_'+v.id+'_'+u);if(cell)cell.textContent='…';const ms=await calcDurationMs(v.id,u,tx,ty);if(cell)cell.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';await new Promise(r=>setTimeout(r,60));}}try{UI.SuccessMessage('Laufzeiten aktualisiert');}catch(_){}};  
+  $('#ax_go').onclick=()=>{const coord=($('#ax_target').value||'').trim();if(!coord)return UI.ErrorMessage('Kein Ziel');const m=coord.match(/^(\\d{1,3})\\|(
