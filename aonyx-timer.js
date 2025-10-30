@@ -67,32 +67,61 @@
       </div>
     </div>
   `;
-  document.body.appendChild(wrap);
+// Panel anhängen, dann sicherstellen, dass DOM-Elemente existieren
+document.body.appendChild(wrap);
 
-  $('#ax_close').onclick=()=>wrap.remove();
+requestAnimationFrame(() => {
+  const closeBtn = document.getElementById('ax_close');
+  const targetIn = document.getElementById('ax_target');
+  const timeIn = document.getElementById('ax_time');
 
-  const targetIn=$('#ax_target');
-  const timeIn=$('#ax_time');
-  targetIn.value=load('target','');
-  timeIn.value=load('time',fmtHMSms(new Date()));
+  if (!closeBtn || !targetIn || !timeIn) {
+    console.warn('[Aonyx] UI-Elemente fehlen – Timer konnte nicht initialisiert werden.');
+    return;
+  }
+
+  closeBtn.onclick = () => wrap.remove();
+
+  targetIn.value = load('target', '');
+  timeIn.value = load('time', fmtHMSms(new Date()));
   timeMask(timeIn);
-  targetIn.addEventListener('input',()=>save('target',targetIn.value));
-  timeIn.addEventListener('input',()=>save('time',timeIn.value));
 
-  document.querySelectorAll('input[name="ax_mode"]').forEach(r=>r.addEventListener('change',()=>save('mode',document.querySelector('input[name="ax_mode"]:checked').value)));
+  targetIn.addEventListener('input', () => save('target', targetIn.value));
+  timeIn.addEventListener('input', () => save('time', timeIn.value));
 
-  try{
-    if(window.TWMap&&typeof TWMap.on==='function'){
-      TWMap.on('click',e=>{if(e?.coords){targetIn.value=`${e.coords.x}|${e.coords.y}`;save('target',targetIn.value);}});
+  document.querySelectorAll('input[name="ax_mode"]').forEach(r => 
+    r.addEventListener('change', () => 
+      save('mode', document.querySelector('input[name="ax_mode"]:checked').value)
+    )
+  );
+
+  // Klick auf Karte = Ziel übernehmen
+  try {
+    if (window.TWMap && typeof TWMap.on === 'function') {
+      TWMap.on('click', e => {
+        if (e?.coords) {
+          targetIn.value = `${e.coords.x}|${e.coords.y}`;
+          save('target', targetIn.value);
+        }
+      });
     }
-  }catch(_){}
+  } catch (_) {}
 
-  setInterval(()=>{
-    const t=parseTime(timeIn.value);const cd=$('#ax_countdown');if(!t||!cd)return;
-    const ms=Math.max(0,t.getTime()-Date.now());
-    const sec=Math.floor(ms/1000)%60,min=Math.floor(ms/60000),rem=String(ms%1000).padStart(3,'0');
-    cd.textContent=`Countdown: ${min>0?min+'m ':''}${sec}.${rem}s`;
-  },60);
+  // Countdown
+  setInterval(() => {
+    const t = parseTime(timeIn.value);
+    const cd = document.getElementById('ax_countdown');
+    if (!t || !cd) return;
+    const ms = Math.max(0, t.getTime() - Date.now());
+    const sec = Math.floor(ms / 1000) % 60;
+    const min = Math.floor(ms / 60000);
+    const rem = String(ms % 1000).padStart(3, '0');
+    cd.textContent = `Countdown: ${min > 0 ? min + 'm ' : ''}${sec}.${rem}s`;
+  }, 60);
+
+  try { UI.SuccessMessage('Aonyx Timer aktiv.'); } catch (_) {}
+});
+
 
   /* ===== Backend ===== */
   function loadVillages(){
@@ -202,3 +231,4 @@
   $('#ax_go').onclick=()=>{const coord=($('#ax_target').value||'').trim();if(!coord)return UI.ErrorMessage('Kein Ziel');const m=coord.match(/^(\\d{1,3})\\|(\\d{1,3})$/);if(!m)return UI.ErrorMessage('Ziel kaputt');const tx=+m[1],ty=+m[2];const mode=document.querySelector('input[name="ax_mode"]:checked')?.value||'attack';const vills=load('vills',[]);const units=availableUnits();for(const v of vills){const set=load('amounts',{})[v.id]||{};const payload={};for(const u of units){const n=+set[u]||0;if(n>0)payload[u]=n;}if(Object.keys(payload).length){sendCommand(v.id,tx,ty,mode,payload);return;}}UI.ErrorMessage('Keine Mengen gesetzt');};
 
   (function init(){if(!load('time',null))save
+
