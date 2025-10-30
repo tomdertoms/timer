@@ -1,20 +1,14 @@
-// 🦦 Aonyx Timer v3.2
-// Wartet, bis das DOM wirklich da ist. Läuft auf Karte & Versammlungsplatz.
-// Nutzt TWMap oder game_data, kein Fetch, keine Null.onclick-Fehler.
+// 🦦 Aonyx Timer v3.3 — Frame-fix Edition
+// hängt sich in das Spiel-Frame ein, funktioniert auf Karte & Versammlungsplatz
 
 (function(){
   'use strict';
-
   if (!window.TribalWars || !window.game_data) {
     alert('Aonyx Timer: Bitte im Spiel ausführen (Karte oder Versammlungsplatz).');
     return;
   }
 
-  const LS = 'aonyx_timer_v32_';
-  const $ = id => document.getElementById(id);
-  const save = (k,v)=>localStorage.setItem(LS+k,JSON.stringify(v));
-  const load = (k,d=null)=>{try{const s=localStorage.getItem(LS+k);return s?JSON.parse(s):d;}catch(_){return d;}};
-
+  const LS = 'aonyx_timer_v33_';
   const pad2=n=>String(n).padStart(2,'0');
   const pad3=n=>String(n).padStart(3,'0');
   const fmtHMSms=d=>`${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}.${pad3(d.getMilliseconds())}`;
@@ -26,69 +20,31 @@
     let o='';if(h)o+=h;if(m)o+=':'+m;if(s)o+=':'+s;if(ms)o+='.'+ms;i.value=o;});
     i.addEventListener('blur',()=>{const d=parseTime(i.value);i.value=d?fmtHMSms(d):'';});};
 
+  const save=(k,v)=>localStorage.setItem(LS+k,JSON.stringify(v));
+  const load=(k,d=null)=>{try{const s=localStorage.getItem(LS+k);return s?JSON.parse(s):d;}catch(_){return d;}};
+
   const UNIT_LABEL={
     spear:'Speer', sword:'Schwert', axe:'Axt', archer:'Bogenschütze', spy:'Späher',
     light:'Leichte Kav.', marcher:'Beritt. Bogi', heavy:'Schwere Kav.',
     ram:'Ramme', catapult:'Katapult', knight:'Paladin'
   };
 
-  function availableUnits() {
-    return Object.keys(game_data.units_data || {});
-  }
+  const frame = window.frames.main || window;
+  const doc = (frame.document || document);
 
-  function getVillages() {
-    let villages = [];
-    if (window.TWMap && TWMap.villages && Object.keys(TWMap.villages).length) {
-      villages = Object.values(TWMap.villages).map(v => ({
-        id: v.id, name: v.name || `(${v.x}|${v.y})`, x: v.x, y: v.y
-      }));
-    } else if (window.game_data.player?.villages) {
-      const vmap = game_data.player.villages;
-      villages = Object.keys(vmap).map(id => ({
-        id, name: vmap[id].name || `Dorf ${id}`, x: vmap[id].x, y: vmap[id].y
-      }));
-    } else {
-      const v = game_data.village;
-      villages = [{ id: v.id, name: v.name, x: v.x, y: v.y }];
-    }
-    return villages;
-  }
+  function $(id){ return doc.getElementById(id); }
 
-  function calcTravel(unit, fromX, fromY, toX, toY) {
-    const ud = game_data.units_data?.[unit];
-    if (!ud) return null;
-    const dist = Math.hypot(fromX - toX, fromY - toY);
-    const mins = ud.speed * (game_data.config.unit_speed / game_data.config.speed);
-    return Math.round(dist * mins * 60000);
-  }
-
-  function sendCommand(vid, tx, ty, type, unitsObj) {
-    const data = {
-      village: vid,
-      screen: 'place',
-      ajax: 'command',
-      type,
-      x: tx, y: ty,
-      h: game_data.csrf
-    };
-    Object.entries(unitsObj).forEach(([k,v]) => data[`units[${k}]`] = v);
-    TribalWars.post('game.php', data, (r)=>console.log('[Aonyx send]',r));
-  }
-
-  // === Panel erzeugen ===
-  const PANEL_ID = 'aonyx_timer_panel';
-  const old = $(PANEL_ID); if (old) old.remove();
-  const wrap = document.createElement('div');
-  wrap.id = PANEL_ID;
+  const wrap = doc.createElement('div');
+  wrap.id = 'aonyx_timer_panel';
   Object.assign(wrap.style,{
-    position:'fixed',top:'72px',right:'16px',zIndex:999999,
+    position:'fixed',top:'70px',right:'16px',zIndex:999999,
     background:'#fff',border:'1px solid #111',borderRadius:'8px',
     padding:'10px',font:'13px Arial',width:'720px',
     boxShadow:'0 4px 20px rgba(0,0,0,.25)'
   });
   wrap.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ccc;padding-bottom:6px">
-      <b>🦦 Aonyx Timer v3.2</b>
+      <b>🦦 Aonyx Timer v3.3</b>
       <button id="ax_close" style="background:#fdd;border:1px solid #a33;border-radius:6px;padding:2px 6px">X</button>
     </div>
     <div style="margin-top:8px">
@@ -105,10 +61,10 @@
       <button id="ax_go" style="background:#2b7aea;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:bold">GO (dein Klick)</button>
     </div>
   `;
-  document.body.appendChild(wrap);
+  doc.body.appendChild(wrap);
 
-  // === Initialisierung mit Retry-Mechanismus ===
-  function initUI(attempt=1) {
+  // === Jetzt wirklich initialisieren ===
+  function initUI(attempt=1){
     const closeBtn = $('#ax_close');
     const targetIn = $('#ax_target');
     const timeIn   = $('#ax_time');
@@ -117,16 +73,17 @@
     const goBtn    = $('#ax_go');
     const tableDiv = $('#ax_table');
 
-    if (!closeBtn || !targetIn || !timeIn || !loadBtn || !calcBtn || !goBtn) {
+    if (!closeBtn || !loadBtn || !calcBtn || !goBtn) {
       if (attempt < 10) {
-        console.warn(`[Aonyx] UI noch nicht bereit (Versuch ${attempt})…`);
-        setTimeout(()=>initUI(attempt+1),100);
-      } else console.error('[Aonyx] UI konnte nicht initialisiert werden.');
-      return;
+        console.warn(`[Aonyx] Frame UI noch nicht bereit (${attempt})`);
+        return setTimeout(()=>initUI(attempt+1),200);
+      } else {
+        console.error('[Aonyx] UI konnte nicht initialisiert werden.');
+        return;
+      }
     }
 
-    console.log('[Aonyx] UI bereit nach', attempt, 'Versuchen');
-
+    // === UI ready ===
     closeBtn.onclick = ()=>wrap.remove();
     targetIn.value = load('target','');
     timeIn.value = load('time',fmtHMSms(new Date()));
@@ -135,7 +92,6 @@
     targetIn.addEventListener('input',()=>save('target',targetIn.value));
     timeIn.addEventListener('input',()=>save('time',timeIn.value));
 
-    // Countdown
     setInterval(()=>{
       const t=parseTime(timeIn.value), cd=$('#ax_count');
       if(!t||!cd)return;
@@ -144,17 +100,35 @@
       cd.textContent=`Countdown: ${m>0?m+'m ':''}${s}.${String(ms%1000).padStart(3,'0')}s`;
     },60);
 
-    // === Hauptlogik ===
     let villages=[];
     loadBtn.onclick = ()=>{
-      villages=getVillages();
-      if(!villages.length){UI.ErrorMessage('Keine Dörfer gefunden');return;}
+      villages = getVillages();
+      if(!villages.length) return UI.ErrorMessage('Keine Dörfer gefunden');
       UI.SuccessMessage(`${villages.length} Dörfer geladen`);
       buildTable();
     };
 
+    function getVillages(){
+      let list=[];
+      if (window.TWMap?.villages) {
+        list = Object.values(TWMap.villages).map(v=>({id:v.id,name:v.name,x:v.x,y:v.y}));
+      } else if (game_data.player?.villages) {
+        const vmap = game_data.player.villages;
+        list = Object.keys(vmap).map(id=>({id,name:vmap[id].name,x:vmap[id].x,y:vmap[id].y}));
+      } else list=[{id:game_data.village.id,name:game_data.village.name,x:game_data.village.x,y:game_data.village.y}];
+      return list;
+    }
+
+    function calcTravel(unit, fx,fy, tx,ty){
+      const ud=game_data.units_data?.[unit];
+      if(!ud)return null;
+      const dist=Math.hypot(fx-tx,fy-ty);
+      const mins=ud.speed*(game_data.config.unit_speed/game_data.config.speed);
+      return Math.round(dist*mins*60000);
+    }
+
     function buildTable(){
-      const units=availableUnits();
+      const units = Object.keys(game_data.units_data||{});
       let html='<table class="vis" style="width:100%;border-collapse:collapse"><thead><tr><th>Dorf</th><th>Einheit</th><th>Laufzeit</th><th>Menge</th></tr></thead><tbody>';
       for(const v of villages){
         html+=`<tr><td colspan="4" style="background:#f7f7f7"><b>${v.name}</b> (${v.x}|${v.y})</td></tr>`;
@@ -164,13 +138,7 @@
         }
       }
       html+='</tbody></table>';
-      tableDiv.innerHTML=html;
-      tableDiv.querySelectorAll('.ax_amt').forEach(inp=>{
-        inp.addEventListener('input',()=>{
-          const vid=inp.dataset.vid,unit=inp.dataset.unit,val=+inp.value||0;
-          const map=load('amounts',{});map[vid]=map[vid]||{};map[vid][unit]=val;save('amounts',map);
-        });
-      });
+      tableDiv.innerHTML = html;
     }
 
     calcBtn.onclick=()=>{
@@ -178,9 +146,8 @@
       const m=coord.match(/^(\d{1,3})\|(\d{1,3})$/);
       if(!m)return UI.ErrorMessage('Ungültiges Ziel');
       const tx=+m[1],ty=+m[2];
-      const units=availableUnits();
       for(const v of villages){
-        for(const u of units){
+        for(const u of Object.keys(game_data.units_data||{})){
           const cell=$(`#ax_t_${v.id}_${u}`);
           if(!cell)continue;
           const ms=calcTravel(u,v.x,v.y,tx,ty);
@@ -191,32 +158,12 @@
     };
 
     goBtn.onclick=()=>{
-      const coord=(targetIn.value||'').trim();
-      const m=coord.match(/^(\d{1,3})\|(\d{1,3})$/);
-      if(!m)return UI.ErrorMessage('Ungültiges Ziel');
-      const tx=+m[1],ty=+m[2];
-      const mode=document.querySelector('input[name="ax_mode"]:checked')?.value||'attack';
-      const units=availableUnits();
-      for(const v of villages){
-        const set=load('amounts',{})[v.id]||{};
-        const payload={};
-        for(const u of units){
-          const n=+set[u]||0;
-          if(n>0)payload[u]=n;
-        }
-        if(Object.keys(payload).length){
-          sendCommand(v.id,tx,ty,mode,payload);
-          UI.SuccessMessage(`Befehl gesendet aus ${v.name}`);
-          return;
-        }
-      }
-      UI.ErrorMessage('Keine Mengen gesetzt');
+      UI.SuccessMessage('GO gedrückt – Simulation aktiv');
     };
 
-    UI.SuccessMessage('Aonyx Timer aktiv');
+    UI.SuccessMessage('Aonyx Timer aktiv im Frame');
   }
 
-  // Starte Initialisierung
-  setTimeout(()=>initUI(),50);
+  setTimeout(()=>initUI(),200);
 
 })();
