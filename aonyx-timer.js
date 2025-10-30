@@ -1,8 +1,8 @@
-// 🦦 Aonyx Timer v3.1
-// Lädt Dörfer, nutzt TWMap oder game_data, kein Fetch. Voll funktionsfähig auf Karte & Versammlungsplatz.
-// Wenn du das liest, läuft’s. Wenn nicht, liegt’s an dir.
+// 🦦 Aonyx Timer v3.2
+// Wartet, bis das DOM wirklich da ist. Läuft auf Karte & Versammlungsplatz.
+// Nutzt TWMap oder game_data, kein Fetch, keine Null.onclick-Fehler.
 
-(function() {
+(function(){
   'use strict';
 
   if (!window.TribalWars || !window.game_data) {
@@ -10,7 +10,7 @@
     return;
   }
 
-  const LS = 'aonyx_timer_v31_';
+  const LS = 'aonyx_timer_v32_';
   const $ = id => document.getElementById(id);
   const save = (k,v)=>localStorage.setItem(LS+k,JSON.stringify(v));
   const load = (k,d=null)=>{try{const s=localStorage.getItem(LS+k);return s?JSON.parse(s):d;}catch(_){return d;}};
@@ -38,22 +38,16 @@
 
   function getVillages() {
     let villages = [];
-    // 1️⃣ Map vorhanden → hol sie da raus
     if (window.TWMap && TWMap.villages && Object.keys(TWMap.villages).length) {
       villages = Object.values(TWMap.villages).map(v => ({
         id: v.id, name: v.name || `(${v.x}|${v.y})`, x: v.x, y: v.y
       }));
-    }
-    // 2️⃣ Fallback → Spieler-Dörfer aus game_data
-    else if (window.game_data.player?.villages) {
+    } else if (window.game_data.player?.villages) {
       const vmap = game_data.player.villages;
       villages = Object.keys(vmap).map(id => ({
-        id, name: vmap[id].name || `Dorf ${id}`,
-        x: vmap[id].x, y: vmap[id].y
+        id, name: vmap[id].name || `Dorf ${id}`, x: vmap[id].x, y: vmap[id].y
       }));
-    }
-    // 3️⃣ Notfalls aktuelles Dorf
-    else {
+    } else {
       const v = game_data.village;
       villages = [{ id: v.id, name: v.name, x: v.x, y: v.y }];
     }
@@ -81,7 +75,7 @@
     TribalWars.post('game.php', data, (r)=>console.log('[Aonyx send]',r));
   }
 
-  /* === UI === */
+  // === Panel erzeugen ===
   const PANEL_ID = 'aonyx_timer_panel';
   const old = $(PANEL_ID); if (old) old.remove();
   const wrap = document.createElement('div');
@@ -94,7 +88,7 @@
   });
   wrap.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ccc;padding-bottom:6px">
-      <b>🦦 Aonyx Timer v3.1</b>
+      <b>🦦 Aonyx Timer v3.2</b>
       <button id="ax_close" style="background:#fdd;border:1px solid #a33;border-radius:6px;padding:2px 6px">X</button>
     </div>
     <div style="margin-top:8px">
@@ -113,7 +107,8 @@
   `;
   document.body.appendChild(wrap);
 
-  requestAnimationFrame(() => {
+  // === Initialisierung mit Retry-Mechanismus ===
+  function initUI(attempt=1) {
     const closeBtn = $('#ax_close');
     const targetIn = $('#ax_target');
     const timeIn   = $('#ax_time');
@@ -121,6 +116,16 @@
     const calcBtn  = $('#ax_calc');
     const goBtn    = $('#ax_go');
     const tableDiv = $('#ax_table');
+
+    if (!closeBtn || !targetIn || !timeIn || !loadBtn || !calcBtn || !goBtn) {
+      if (attempt < 10) {
+        console.warn(`[Aonyx] UI noch nicht bereit (Versuch ${attempt})…`);
+        setTimeout(()=>initUI(attempt+1),100);
+      } else console.error('[Aonyx] UI konnte nicht initialisiert werden.');
+      return;
+    }
+
+    console.log('[Aonyx] UI bereit nach', attempt, 'Versuchen');
 
     closeBtn.onclick = ()=>wrap.remove();
     targetIn.value = load('target','');
@@ -209,6 +214,9 @@
     };
 
     UI.SuccessMessage('Aonyx Timer aktiv');
-  });
+  }
+
+  // Starte Initialisierung
+  setTimeout(()=>initUI(),50);
 
 })();
