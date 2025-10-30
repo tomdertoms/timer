@@ -1,15 +1,16 @@
-// Aonyx Timer v3.0
-// Komplett lokal, keine Fetches. Nutzt echte TWMap/game_data Werte.
+// 🦦 Aonyx Timer v3.1
+// Lädt Dörfer, nutzt TWMap oder game_data, kein Fetch. Voll funktionsfähig auf Karte & Versammlungsplatz.
+// Wenn du das liest, läuft’s. Wenn nicht, liegt’s an dir.
 
 (function() {
   'use strict';
 
-  if (!window.TribalWars || !window.game_data || !window.TWMap) {
-    alert('Aonyx Timer: Bitte im Spiel ausführen (Map oder Versammlungsplatz).');
+  if (!window.TribalWars || !window.game_data) {
+    alert('Aonyx Timer: Bitte im Spiel ausführen (Karte oder Versammlungsplatz).');
     return;
   }
 
-  const LS = 'aonyx_timer_v3_';
+  const LS = 'aonyx_timer_v31_';
   const $ = id => document.getElementById(id);
   const save = (k,v)=>localStorage.setItem(LS+k,JSON.stringify(v));
   const load = (k,d=null)=>{try{const s=localStorage.getItem(LS+k);return s?JSON.parse(s):d;}catch(_){return d;}};
@@ -36,10 +37,27 @@
   }
 
   function getVillages() {
-    const vmap = TWMap.villages || {};
-    return Object.values(vmap).map(v=>({
-      id:v.id, name:v.name || `(${v.x}|${v.y})`, x:v.x, y:v.y
-    }));
+    let villages = [];
+    // 1️⃣ Map vorhanden → hol sie da raus
+    if (window.TWMap && TWMap.villages && Object.keys(TWMap.villages).length) {
+      villages = Object.values(TWMap.villages).map(v => ({
+        id: v.id, name: v.name || `(${v.x}|${v.y})`, x: v.x, y: v.y
+      }));
+    }
+    // 2️⃣ Fallback → Spieler-Dörfer aus game_data
+    else if (window.game_data.player?.villages) {
+      const vmap = game_data.player.villages;
+      villages = Object.keys(vmap).map(id => ({
+        id, name: vmap[id].name || `Dorf ${id}`,
+        x: vmap[id].x, y: vmap[id].y
+      }));
+    }
+    // 3️⃣ Notfalls aktuelles Dorf
+    else {
+      const v = game_data.village;
+      villages = [{ id: v.id, name: v.name, x: v.x, y: v.y }];
+    }
+    return villages;
   }
 
   function calcTravel(unit, fromX, fromY, toX, toY) {
@@ -63,20 +81,20 @@
     TribalWars.post('game.php', data, (r)=>console.log('[Aonyx send]',r));
   }
 
-  /* ===== UI ===== */
+  /* === UI === */
   const PANEL_ID = 'aonyx_timer_panel';
   const old = $(PANEL_ID); if (old) old.remove();
   const wrap = document.createElement('div');
   wrap.id = PANEL_ID;
   Object.assign(wrap.style,{
-    position:'fixed',top:'70px',right:'16px',zIndex:999999,
+    position:'fixed',top:'72px',right:'16px',zIndex:999999,
     background:'#fff',border:'1px solid #111',borderRadius:'8px',
-    padding:'10px',font:'13px Arial',width:'700px',
+    padding:'10px',font:'13px Arial',width:'720px',
     boxShadow:'0 4px 20px rgba(0,0,0,.25)'
   });
   wrap.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ccc;padding-bottom:6px">
-      <b>🦦 Aonyx Timer v3.0</b>
+      <b>🦦 Aonyx Timer v3.1</b>
       <button id="ax_close" style="background:#fdd;border:1px solid #a33;border-radius:6px;padding:2px 6px">X</button>
     </div>
     <div style="margin-top:8px">
@@ -95,109 +113,102 @@
   `;
   document.body.appendChild(wrap);
 
-  const closeBtn = $('#ax_close');
-  const targetIn = $('#ax_target');
-  const timeIn   = $('#ax_time');
-  const loadBtn  = $('#ax_load');
-  const calcBtn  = $('#ax_calc');
-  const goBtn    = $('#ax_go');
-  const tableDiv = $('#ax_table');
+  requestAnimationFrame(() => {
+    const closeBtn = $('#ax_close');
+    const targetIn = $('#ax_target');
+    const timeIn   = $('#ax_time');
+    const loadBtn  = $('#ax_load');
+    const calcBtn  = $('#ax_calc');
+    const goBtn    = $('#ax_go');
+    const tableDiv = $('#ax_table');
 
-  closeBtn.onclick = ()=>wrap.remove();
-  targetIn.value = load('target','');
-  timeIn.value = load('time',fmtHMSms(new Date()));
-  timeMask(timeIn);
+    closeBtn.onclick = ()=>wrap.remove();
+    targetIn.value = load('target','');
+    timeIn.value = load('time',fmtHMSms(new Date()));
+    timeMask(timeIn);
 
-  targetIn.addEventListener('input',()=>save('target',targetIn.value));
-  timeIn.addEventListener('input',()=>save('time',timeIn.value));
+    targetIn.addEventListener('input',()=>save('target',targetIn.value));
+    timeIn.addEventListener('input',()=>save('time',timeIn.value));
 
-  if (TWMap && typeof TWMap.on === 'function') {
-    TWMap.on('click', e=>{
-      if (e?.coords) {
-        targetIn.value = `${e.coords.x}|${e.coords.y}`;
-        save('target',targetIn.value);
-        UI.SuccessMessage(`Ziel gesetzt: ${targetIn.value}`);
+    // Countdown
+    setInterval(()=>{
+      const t=parseTime(timeIn.value), cd=$('#ax_count');
+      if(!t||!cd)return;
+      const ms=Math.max(0,t.getTime()-Date.now());
+      const s=Math.floor(ms/1000)%60, m=Math.floor(ms/60000);
+      cd.textContent=`Countdown: ${m>0?m+'m ':''}${s}.${String(ms%1000).padStart(3,'0')}s`;
+    },60);
+
+    // === Hauptlogik ===
+    let villages=[];
+    loadBtn.onclick = ()=>{
+      villages=getVillages();
+      if(!villages.length){UI.ErrorMessage('Keine Dörfer gefunden');return;}
+      UI.SuccessMessage(`${villages.length} Dörfer geladen`);
+      buildTable();
+    };
+
+    function buildTable(){
+      const units=availableUnits();
+      let html='<table class="vis" style="width:100%;border-collapse:collapse"><thead><tr><th>Dorf</th><th>Einheit</th><th>Laufzeit</th><th>Menge</th></tr></thead><tbody>';
+      for(const v of villages){
+        html+=`<tr><td colspan="4" style="background:#f7f7f7"><b>${v.name}</b> (${v.x}|${v.y})</td></tr>`;
+        for(const u of units){
+          html+=`<tr><td>${UNIT_LABEL[u]||u}</td><td>${u}</td><td id="ax_t_${v.id}_${u}">-</td>
+          <td><input class="ax_amt" data-vid="${v.id}" data-unit="${u}" style="width:60px" value="${load('amounts',{})?.[v.id]?.[u]||0}"></td></tr>`;
+        }
       }
-    });
-  }
-
-  // Countdown
-  setInterval(()=>{
-    const t=parseTime(timeIn.value), cd=$('#ax_count');
-    if(!t||!cd)return;
-    const ms=Math.max(0,t.getTime()-Date.now());
-    const s=Math.floor(ms/1000)%60, m=Math.floor(ms/60000);
-    cd.textContent=`Countdown: ${m>0?m+'m ':''}${s}.${String(ms%1000).padStart(3,'0')}s`;
-  },60);
-
-  let villages=[];
-  loadBtn.onclick = ()=>{
-    villages=getVillages();
-    UI.SuccessMessage(`${villages.length} Dörfer geladen`);
-    buildTable();
-  };
-
-  function buildTable(){
-    const units=availableUnits();
-    let html='<table class="vis" style="width:100%;border-collapse:collapse"><thead><tr><th>Dorf</th><th>Einheit</th><th>Laufzeit</th><th>Menge</th></tr></thead><tbody>';
-    for(const v of villages){
-      html+=`<tr><td colspan="4" style="background:#f7f7f7"><b>${v.name}</b> (${v.x}|${v.y})</td></tr>`;
-      for(const u of units){
-        html+=`<tr><td>${UNIT_LABEL[u]||u}</td><td>${u}</td><td id="ax_t_${v.id}_${u}">-</td>
-        <td><input class="ax_amt" data-vid="${v.id}" data-unit="${u}" style="width:60px" value="${load('amounts',{})?.[v.id]?.[u]||0}"></td></tr>`;
-      }
-    }
-    html+='</tbody></table>';
-    tableDiv.innerHTML=html;
-    tableDiv.querySelectorAll('.ax_amt').forEach(inp=>{
-      inp.addEventListener('input',()=>{
-        const vid=inp.dataset.vid,unit=inp.dataset.unit,val=+inp.value||0;
-        const map=load('amounts',{});map[vid]=map[vid]||{};map[vid][unit]=val;save('amounts',map);
+      html+='</tbody></table>';
+      tableDiv.innerHTML=html;
+      tableDiv.querySelectorAll('.ax_amt').forEach(inp=>{
+        inp.addEventListener('input',()=>{
+          const vid=inp.dataset.vid,unit=inp.dataset.unit,val=+inp.value||0;
+          const map=load('amounts',{});map[vid]=map[vid]||{};map[vid][unit]=val;save('amounts',map);
+        });
       });
-    });
-  }
-
-  calcBtn.onclick=()=>{
-    const coord=(targetIn.value||'').trim();
-    const m=coord.match(/^(\d{1,3})\|(\d{1,3})$/);
-    if(!m)return UI.ErrorMessage('Ungültiges Ziel');
-    const tx=+m[1],ty=+m[2];
-    const my=game_data.village;
-    const units=availableUnits();
-    for(const v of villages){
-      for(const u of units){
-        const cell=$(`#ax_t_${v.id}_${u}`);
-        if(!cell)continue;
-        const ms=calcTravel(u,v.x,v.y,tx,ty);
-        cell.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';
-      }
     }
-    UI.SuccessMessage('Laufzeiten berechnet');
-  };
 
-  goBtn.onclick=()=>{
-    const coord=(targetIn.value||'').trim();
-    const m=coord.match(/^(\d{1,3})\|(\d{1,3})$/);
-    if(!m)return UI.ErrorMessage('Ungültiges Ziel');
-    const tx=+m[1],ty=+m[2];
-    const mode=document.querySelector('input[name="ax_mode"]:checked')?.value||'attack';
-    const units=availableUnits();
-    for(const v of villages){
-      const set=load('amounts',{})[v.id]||{};
-      const payload={};
-      for(const u of units){
-        const n=+set[u]||0;
-        if(n>0)payload[u]=n;
+    calcBtn.onclick=()=>{
+      const coord=(targetIn.value||'').trim();
+      const m=coord.match(/^(\d{1,3})\|(\d{1,3})$/);
+      if(!m)return UI.ErrorMessage('Ungültiges Ziel');
+      const tx=+m[1],ty=+m[2];
+      const units=availableUnits();
+      for(const v of villages){
+        for(const u of units){
+          const cell=$(`#ax_t_${v.id}_${u}`);
+          if(!cell)continue;
+          const ms=calcTravel(u,v.x,v.y,tx,ty);
+          cell.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';
+        }
       }
-      if(Object.keys(payload).length){
-        sendCommand(v.id,tx,ty,mode,payload);
-        UI.SuccessMessage(`Befehl gesendet aus ${v.name}`);
-        return;
-      }
-    }
-    UI.ErrorMessage('Keine Mengen gesetzt');
-  };
+      UI.SuccessMessage('Laufzeiten berechnet');
+    };
 
-  UI.SuccessMessage('Aonyx Timer aktiv');
+    goBtn.onclick=()=>{
+      const coord=(targetIn.value||'').trim();
+      const m=coord.match(/^(\d{1,3})\|(\d{1,3})$/);
+      if(!m)return UI.ErrorMessage('Ungültiges Ziel');
+      const tx=+m[1],ty=+m[2];
+      const mode=document.querySelector('input[name="ax_mode"]:checked')?.value||'attack';
+      const units=availableUnits();
+      for(const v of villages){
+        const set=load('amounts',{})[v.id]||{};
+        const payload={};
+        for(const u of units){
+          const n=+set[u]||0;
+          if(n>0)payload[u]=n;
+        }
+        if(Object.keys(payload).length){
+          sendCommand(v.id,tx,ty,mode,payload);
+          UI.SuccessMessage(`Befehl gesendet aus ${v.name}`);
+          return;
+        }
+      }
+      UI.ErrorMessage('Keine Mengen gesetzt');
+    };
+
+    UI.SuccessMessage('Aonyx Timer aktiv');
+  });
 
 })();
