@@ -92,7 +92,6 @@
     }
   }
 
-document.body.appendChild(panel);
 queueMicrotask(() => {
   const loadBtn = panel.querySelector('#ax_load_vills');
   const timeBtn = panel.querySelector('#ax_check_time');
@@ -107,5 +106,6 @@ queueMicrotask(() => {
 
   console.log('[Aonyx] Minimal Proof geladen.');
 })();
+
 
 
