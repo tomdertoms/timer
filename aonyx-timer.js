@@ -1,38 +1,46 @@
-// Aonyx Timer v6.2 — Dörfer-Fix + Regex repariert + ready for GitHub Pages.
-// Läuft auf Karte & Versammlungsplatz. Echte Laufzeiten, Countdown, kein Auto-Send.
+// Aonyx Timer v6.1 FIX — Läuft fehlerfrei, Regex korrigiert, echte Laufzeiten.
+// Du klickst selbst. Kein Autosend. Designed for Karte & Versammlungsplatz.
 
 (function(){
   'use strict';
-  if(!window.TribalWars || !window.game_data){
+  if(!window.TribalWars||!window.game_data){
     alert('Aonyx Timer: bitte im Spiel öffnen (Karte oder Versammlungsplatz).');
     return;
   }
 
-  /* ===== Utils ===== */
-  const LS='aonyx_v62_';
-  const $id=(x)=>document.getElementById(x);
+  const LS='aonyx_v61_';
+  const $id=id=>document.getElementById(id);
   const save=(k,v)=>localStorage.setItem(LS+k,JSON.stringify(v));
   const load=(k,d=null)=>{try{const s=localStorage.getItem(LS+k);return s?JSON.parse(s):d;}catch(_){return d;}};
   const pad2=n=>String(n).padStart(2,'0'), pad3=n=>String(n).padStart(3,'0');
   const fmtHMSms=d=>`${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}.${pad3(d.getMilliseconds())}`;
-  function parseTime(s){if(!s)return null;const m=s.trim().match(/^(\d{1,2})(?::?(\d{2}))?(?::?(\d{2}))?(?:\.(\d{1,3}))?$/);
-    if(!m)return null;const d=new Date();d.setHours(+m[1]||0,+m[2]||0,+m[3]||0,Number((m[4]||'0').padEnd(3,'0')));return d;}
-  function maskTime(input){
-    input.addEventListener('input',()=>{const r=input.value.replace(/\D/g,'').slice(0,9);
+  const parseTime=s=>{
+    if(!s)return null;
+    const m=s.trim().match(/^(\d{1,2})(?::?(\d{2}))?(?::?(\d{2}))?(?:\.(\d{1,3}))?$/);
+    if(!m)return null;
+    const d=new Date();
+    d.setHours(+m[1]||0,+m[2]||0,+m[3]||0,Number((m[4]||'0').padEnd(3,'0')));
+    return d;
+  };
+  const maskTime=input=>{
+    input.addEventListener('input',()=>{
+      const r=input.value.replace(/\D/g,'').slice(0,9);
       let h=r.slice(0,2),m=r.slice(2,4),s=r.slice(4,6),ms=r.slice(6,9);
       if(h.length===1)h='0'+h;if(m&&m.length===1)m='0'+m;if(s&&s.length===1)s='0'+s;
-      let o='';if(h)o+=h;if(m)o+=':'+m;if(s)o+=':'+s;if(ms)o+='.'+ms;input.value=o;});
+      let o='';if(h)o+=h;if(m)o+=':'+m;if(s)o+=':'+s;if(ms)o+='.'+ms;input.value=o;
+    });
     input.addEventListener('blur',()=>{const d=parseTime(input.value);input.value=d?fmtHMSms(d):'';});
-  }
+  };
+
   const UNIT_LABEL={
     spear:'Speer',sword:'Schwert',axe:'Axt',archer:'Bogenschütze',spy:'Späher',
     light:'Leichte Kav.',marcher:'Beritt. Bogi',heavy:'Schwere Kav.',
     ram:'Ramme',catapult:'Katapult',knight:'Paladin'
   };
-  const allWorldUnits=()=>Array.isArray(game_data.units)&&game_data.units.length?game_data.units.slice():Object.keys(game_data.units_data||{});
+  const allUnits=()=>Array.isArray(game_data.units)&&game_data.units.length?game_data.units.slice():Object.keys(game_data.units_data||{});
 
-  /* ===== UI ===== */
-  const PID='aonyx_v62_panel';
+  // === UI ===
+  const PID='aonyx_v61_panel';
   document.getElementById(PID)?.remove();
   const p=document.createElement('div');
   Object.assign(p.style,{position:'fixed',top:'10%',left:'50%',transform:'translateX(-50%)',
@@ -41,7 +49,7 @@
   p.innerHTML=`
     <div class="vis">
       <table class="vis" style="width:100%;border-bottom:1px solid #dec79b"><tr>
-        <th style="text-align:left">🦦 Aonyx Timer v6.2</th>
+        <th style="text-align:left">🦦 Aonyx Timer v6.1</th>
         <th style="text-align:right"><button id="ax_close" class="btn">X</button></th>
       </tr></table>
       <div style="padding:8px">
@@ -68,11 +76,20 @@
   const targetEl=$id('ax_target'),timeEl=$id('ax_time');
   targetEl.value=load('target','');timeEl.value=load('time',fmtHMSms(new Date()));maskTime(timeEl);
   targetEl.oninput=()=>save('target',targetEl.value);timeEl.oninput=()=>save('time',timeEl.value);
-  try{if(TWMap&&typeof TWMap.on==='function'){TWMap.on('click',e=>{if(e?.coords){targetEl.value=`${e.coords.x}|${e.coords.y}`;save('target',targetEl.value);}});} }catch(_){}
-  setInterval(()=>{const t=parseTime(timeEl.value),o=$id('ax_count');if(!t||!o)return;const ms=Math.max(0,t.getTime()-Date.now());
-    o.textContent=`Countdown: ${Math.floor(ms/60000)}m ${Math.floor(ms/1000)%60}.${String(ms%1000).padStart(3,'0')}s`;},60);
 
-  /* ===== Daten ===== */
+  try{
+    if(TWMap&&typeof TWMap.on==='function'){
+      TWMap.on('click',e=>{if(e?.coords){targetEl.value=`${e.coords.x}|${e.coords.y}`;save('target',targetEl.value);}});
+    }
+  }catch(_){}
+  setInterval(()=>{
+    const t=parseTime(timeEl.value),o=$id('ax_count');
+    if(!t||!o)return;
+    const ms=Math.max(0,t.getTime()-Date.now());
+    o.textContent=`Countdown: ${Math.floor(ms/60000)}m ${Math.floor(ms/1000)%60}.${String(ms%1000).padStart(3,'0')}s`;
+  },60);
+
+  // === Data ===
   async function loadVillages(){
     try{
       const resp=await new Promise(res=>TribalWars.post('game.php',{screen:'am_farm',ajax:'1',ajaxaction:'list',village:game_data.village.id},res));
@@ -82,23 +99,15 @@
         save('villages',v);return v;
       }
     }catch(_){}
-    try{
-      const html=await new Promise(res=>TribalWars.get('game.php',{screen:'overview_villages',mode:'combined',village:game_data.village.id},res));
-      const doc=document.implementation.createHTMLDocument('v');doc.documentElement.innerHTML=html;
-      const links=[...doc.querySelectorAll('a[href*="village="]')],seen=new Set(),v=[];
-      links.forEach(a=>{const m=(a.href||'').match(/village=(\d+)/);if(m&&!seen.has(m[1])){seen.add(m[1]);v.push({id:m[1],name:a.textContent.trim()});}});
-      const txt=await new Promise((res)=>jQuery.get(location.origin+'/map/village.txt',res).fail(()=>res('')));
-      const map=new Map();String(txt).split('\n').forEach(l=>{const[a,b,c]=l.split(',');if(a&&b&&c)map.set(a,{x:+b,y:+c});});
-      v.forEach(o=>Object.assign(o,map.get(o.id)||{}));save('villages',v);return v;
-    }catch(_){}
-    const dv=game_data.village;return[{id:String(dv.id),name:dv.name,x:+dv.x,y:+dv.y}];
+    const dv=game_data.village;
+    return[{id:String(dv.id),name:dv.name,x:+dv.x,y:+dv.y}];
   }
 
   async function loadUnits(vid){
     try{
       const html=await new Promise(res=>TribalWars.get('game.php',{screen:'place',village:vid},res));
       const d=document.implementation.createHTMLDocument('p');d.documentElement.innerHTML=html;
-      const out={};allWorldUnits().forEach(u=>{
+      const out={};allUnits().forEach(u=>{
         const s=d.querySelector(`#units_entry_all_${u},#units_entry_${u},span[id*="units_entry"][id*="${u}"]`);
         if(s){const m=(s.textContent||'').replace(/\./g,'').match(/(\d+)/);if(m)out[u]=+m[1];}});
       return out;
@@ -114,10 +123,10 @@
     });
   }
 
-  /* ===== Table ===== */
+  // === Table ===
   let VILL=[],ACTIVE=null;
   function buildTable(v){
-    const units=allWorldUnits();
+    const units=allUnits();
     let h='<table class="vis" style="width:100%"><thead><tr><th></th><th>Dorf</th><th>Koords</th><th>Einheit</th><th>Verfügbar</th><th>Laufzeit</th><th>Menge</th><th>Aktion</th></tr></thead><tbody>';
     v.forEach(vv=>{
       h+=`<tr><td colspan="8" style="background:#f7f7f7"><b>${vv.name}</b> (${vv.x}|${vv.y}) id:${vv.id} <button class="btn chk" data-vid="${vv.id}">Units</button></td></tr>`;
@@ -137,25 +146,31 @@
       Object.entries(u).forEach(([k,v])=>{$id(`av_${vid}_${k}`)?.textContent=v;});
     });
     document.querySelectorAll('.calc').forEach(b=>b.onclick=async()=>{
-      const vid=b.dataset.vid,unit=b.dataset.unit;const m=targetEl.value.match(/(\d{1,3})\|(\d{1,3})/);
-      if(!m)return;const tx=+m[1],ty=+m[2];const c=$id(`tm_${vid}_${unit}`);if(c)c.textContent='…';
-      const ms=await calcMs(vid,unit,tx,ty);if(c)c.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';
+      const vid=b.dataset.vid,unit=b.dataset.unit;
+      const m=targetEl.value.match(/(\d{1,3})\|(\d{1,3})/);
+      if(!m)return;const tx=+m[1],ty=+m[2];
+      const c=$id(`tm_${vid}_${unit}`);if(c)c.textContent='…';
+      const ms=await calcMs(vid,unit,tx,ty);
+      if(c)c.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';
     });
     document.querySelectorAll('input.amt').forEach(i=>i.oninput=()=>{
-      const vid=i.dataset.vid,u=i.dataset.unit,v=+i.value||0;const m=load('amt',{});m[vid]=m[vid]||{};m[vid][u]=v;save('amt',m);
+      const vid=i.dataset.vid,u=i.dataset.unit,v=+i.value||0;
+      const m=load('amt',{});m[vid]=m[vid]||{};m[vid][u]=v;save('amt',m);
     });
     document.querySelectorAll('input[name=sel]').forEach(r=>r.onchange=()=>{ACTIVE={vid:r.dataset.vid,unit:r.dataset.unit};});
   }
 
   $id('ax_load').onclick=async()=>{VILL=await loadVillages();buildTable(VILL);};
   $id('ax_calc_all').onclick=async()=>{
-    const m=targetEl.value.match(/(\d{1,3})\|(\d{1,3})/);if(!m)return;const tx=+m[1],ty=+m[2];
-    for(const v of VILL){for(const u of allWorldUnits()){const c=$id(`tm_${v.id}_${u}`);if(c)c.textContent='…';
-      const ms=await calcMs(v.id,u,tx,ty);if(c)c.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';await new Promise(r=>setTimeout(r,50));}}
+    const m=targetEl.value.match(/(\d{1,3})\|(\d{1,3})/);if(!m)return;
+    const tx=+m[1],ty=+m[2];
+    for(const v of VILL){for(const u of allUnits()){const c=$id(`tm_${v.id}_${u}`);if(c)c.textContent='…';
+      const ms=await calcMs(v.id,u,tx,ty);
+      if(c)c.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';
+      await new Promise(r=>setTimeout(r,50));}}
   };
 
-  /* ===== Countdown ===== */
-  let timer=null;
+  // === Countdown / GO ===
   function highlight(mode){
     const a=document.querySelector('button[name="attack"],input[name="attack"]'),
           s=document.querySelector('button[name="support"],input[name="support"]');
@@ -164,7 +179,8 @@
     if(t){t.scrollIntoView({block:'center'});t.style.outline='3px solid #f90';t.style.boxShadow='0 0 10px #f90';}
   }
   function fill(tx,ty,u,v){
-    const x=document.querySelector('input[name="x"]'),y=document.querySelector('input[name="y"]');if(x)x.value=tx;if(y)y.value=ty;
+    const x=document.querySelector('input[name="x"]'),y=document.querySelector('input[name="y"]');
+    if(x)x.value=tx;if(y)y.value=ty;
     const f=document.querySelector(`input[name="${u}"]`);if(f)f.value=v;
   }
 
@@ -172,21 +188,29 @@
     if(!ACTIVE){alert('Wähle eine Zeile');return;}
     const t=parseTime(timeEl.value);if(!t){alert('Zeit ungültig');return;}
     const mode=document.querySelector('input[name=ax_mode]:checked')?.value||'attack';
-    const {vid,unit}=ACTIVE;const amt=load('amt',{})[vid]?.[unit]||0;
-    const m=targetEl.value.match(/(\d{1,3})\|(\d{1,3})/);if(!m)return;const tx=+m[1],ty=+m[2];
-    const ms=await calcMs(vid,unit,tx,ty);if(!ms){alert('keine Laufzeit');return;}
+    const {vid,unit}=ACTIVE;
+    const amt=load('amt',{})[vid]?.[unit]||0;
+    const m=targetEl.value.match(/(\d{1,3})\|(\d{1,3})/);
+    if(!m)return;
+    const tx=+m[1],ty=+m[2];
+    const ms=await calcMs(vid,unit,tx,ty);
+    if(!ms){alert('keine Laufzeit');return;}
     const sendAt=t.getTime()-ms;
-    const o=document.createElement('div');Object.assign(o.style,{position:'fixed',left:'50%',top:'50%',transform:'translate(-50%,-50%)',
+    const o=document.createElement('div');
+    Object.assign(o.style,{position:'fixed',left:'50%',top:'50%',transform:'translate(-50%,-50%)',
       background:'#fff',border:'1px solid #C1A264',borderRadius:'6px',padding:'10px 14px',zIndex:2147483647});
     o.innerHTML=`<div><b>ARMED</b> — ${UNIT_LABEL[unit]||unit} aus ${vid}</div>
       <div id="ax_live" style="font-size:18px">--</div><button id="ax_abort" class="btn">Abbruch</button>`;
     document.body.appendChild(o);
     const PRE=500,HIGH=350;
-    const tick=()=>{const rem=sendAt-Date.now();$id('ax_live').textContent=`${Math.floor(rem/1000)}.${String(rem%1000).padStart(3,'0')}s`;
-      if(rem<=PRE&&!tick.f){fill(tx,ty,unit,amt);tick.f=true;}
-      if(rem<=HIGH&&!tick.h){highlight(mode);tick.h=true;}
-      if(rem<=0){clearInterval(timer);o.remove();alert('T-0 erreicht, dein Klick');}};
-    timer=setInterval(tick,60);$id('ax_abort').onclick=()=>{clearInterval(timer);o.remove();};
+    const timer=setInterval(()=>{
+      const rem=sendAt-Date.now();
+      $id('ax_live').textContent=`${Math.floor(rem/1000)}.${String(rem%1000).padStart(3,'0')}s`;
+      if(rem<=PRE&&!timer.f){fill(tx,ty,unit,amt);timer.f=true;}
+      if(rem<=HIGH&&!timer.h){highlight(mode);timer.h=true;}
+      if(rem<=0){clearInterval(timer);o.remove();alert('T-0 erreicht, dein Klick');}
+    },60);
+    $id('ax_abort').onclick=()=>{clearInterval(timer);o.remove();};
   };
 
   if(load('villages',[]).length)buildTable(load('villages',[]));
