@@ -32,7 +32,19 @@
   `;
   document.body.appendChild(panel);
 
-  function msg(t){ $('#ax_status').textContent=t; }
+ function msg(t){
+  const el = panel.querySelector('#ax_status');
+  if (!el) {
+    console.warn('[Aonyx] ax_status nicht gefunden, Retry in 100ms.');
+    setTimeout(() => {
+      const el2 = panel.querySelector('#ax_status');
+      if (el2) el2.textContent = t;
+      else console.warn('[Aonyx] msg() konnte ax_status auch beim Retry nicht finden.');
+    }, 100);
+    return;
+  }
+  el.textContent = t;
+}
   function out(t){ $('#ax_output').innerHTML += `<div>${t}</div>`; }
 
   async function loadVillages(){
@@ -95,4 +107,5 @@ queueMicrotask(() => {
 
   console.log('[Aonyx] Minimal Proof geladen.');
 })();
+
 
