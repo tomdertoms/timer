@@ -1,5 +1,5 @@
-// Aonyx Timer v6.1a — Hotfix: RegEx repariert.
-// Lädt Dörfer über am_farm/list, echte Laufzeiten, ms-genauer Countdown, kein Auto-Send.
+// Aonyx Timer v6.2 — Dörfer-Fix + Regex repariert + ready for GitHub Pages.
+// Läuft auf Karte & Versammlungsplatz. Echte Laufzeiten, Countdown, kein Auto-Send.
 
 (function(){
   'use strict';
@@ -9,7 +9,7 @@
   }
 
   /* ===== Utils ===== */
-  const LS='aonyx_v61a_';
+  const LS='aonyx_v62_';
   const $id=(x)=>document.getElementById(x);
   const save=(k,v)=>localStorage.setItem(LS+k,JSON.stringify(v));
   const load=(k,d=null)=>{try{const s=localStorage.getItem(LS+k);return s?JSON.parse(s):d;}catch(_){return d;}};
@@ -17,11 +17,13 @@
   const fmtHMSms=d=>`${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}.${pad3(d.getMilliseconds())}`;
   function parseTime(s){if(!s)return null;const m=s.trim().match(/^(\d{1,2})(?::?(\d{2}))?(?::?(\d{2}))?(?:\.(\d{1,3}))?$/);
     if(!m)return null;const d=new Date();d.setHours(+m[1]||0,+m[2]||0,+m[3]||0,Number((m[4]||'0').padEnd(3,'0')));return d;}
-  function maskTime(i){i.addEventListener('input',()=>{const r=i.value.replace(/\D/g,'').slice(0,9);
-    let h=r.slice(0,2),m=r.slice(2,4),s=r.slice(4,6),ms=r.slice(6,9);
-    if(h.length===1)h='0'+h;if(m&&m.length===1)m='0'+m;if(s&&s.length===1)s='0'+s;
-    let o='';if(h)o+=h;if(m)o+=':'+m;if(s)o+=':'+s;if(ms)o+='.'+ms;i.value=o;});
-    i.addEventListener('blur',()=>{const d=parseTime(i.value);i.value=d?fmtHMSms(d):'';});}
+  function maskTime(input){
+    input.addEventListener('input',()=>{const r=input.value.replace(/\D/g,'').slice(0,9);
+      let h=r.slice(0,2),m=r.slice(2,4),s=r.slice(4,6),ms=r.slice(6,9);
+      if(h.length===1)h='0'+h;if(m&&m.length===1)m='0'+m;if(s&&s.length===1)s='0'+s;
+      let o='';if(h)o+=h;if(m)o+=':'+m;if(s)o+=':'+s;if(ms)o+='.'+ms;input.value=o;});
+    input.addEventListener('blur',()=>{const d=parseTime(input.value);input.value=d?fmtHMSms(d):'';});
+  }
   const UNIT_LABEL={
     spear:'Speer',sword:'Schwert',axe:'Axt',archer:'Bogenschütze',spy:'Späher',
     light:'Leichte Kav.',marcher:'Beritt. Bogi',heavy:'Schwere Kav.',
@@ -30,7 +32,7 @@
   const allWorldUnits=()=>Array.isArray(game_data.units)&&game_data.units.length?game_data.units.slice():Object.keys(game_data.units_data||{});
 
   /* ===== UI ===== */
-  const PID='aonyx_v61a_panel';
+  const PID='aonyx_v62_panel';
   document.getElementById(PID)?.remove();
   const p=document.createElement('div');
   Object.assign(p.style,{position:'fixed',top:'10%',left:'50%',transform:'translateX(-50%)',
@@ -39,7 +41,7 @@
   p.innerHTML=`
     <div class="vis">
       <table class="vis" style="width:100%;border-bottom:1px solid #dec79b"><tr>
-        <th style="text-align:left">🦦 Aonyx Timer v6.1a</th>
+        <th style="text-align:left">🦦 Aonyx Timer v6.2</th>
         <th style="text-align:right"><button id="ax_close" class="btn">X</button></th>
       </tr></table>
       <div style="padding:8px">
@@ -85,12 +87,13 @@
       const doc=document.implementation.createHTMLDocument('v');doc.documentElement.innerHTML=html;
       const links=[...doc.querySelectorAll('a[href*="village="]')],seen=new Set(),v=[];
       links.forEach(a=>{const m=(a.href||'').match(/village=(\d+)/);if(m&&!seen.has(m[1])){seen.add(m[1]);v.push({id:m[1],name:a.textContent.trim()});}});
-      const txt=await new Promise((res,rej)=>jQuery.get(location.origin+'/map/village.txt',res).fail(()=>res('')));
+      const txt=await new Promise((res)=>jQuery.get(location.origin+'/map/village.txt',res).fail(()=>res('')));
       const map=new Map();String(txt).split('\n').forEach(l=>{const[a,b,c]=l.split(',');if(a&&b&&c)map.set(a,{x:+b,y:+c});});
       v.forEach(o=>Object.assign(o,map.get(o.id)||{}));save('villages',v);return v;
     }catch(_){}
     const dv=game_data.village;return[{id:String(dv.id),name:dv.name,x:+dv.x,y:+dv.y}];
   }
+
   async function loadUnits(vid){
     try{
       const html=await new Promise(res=>TribalWars.get('game.php',{screen:'place',village:vid},res));
@@ -101,6 +104,7 @@
       return out;
     }catch(_){return{};}
   }
+
   function calcMs(vid,unit,tx,ty){
     return new Promise(r=>{
       TribalWars.post('game.php',{screen:'place',ajax:'1',ajaxaction:'calculate_time',village:vid,x:tx,y:ty,unit,h:game_data.csrf},resp=>{
@@ -110,7 +114,7 @@
     });
   }
 
-  /* ===== UI Table ===== */
+  /* ===== Table ===== */
   let VILL=[],ACTIVE=null;
   function buildTable(v){
     const units=allWorldUnits();
