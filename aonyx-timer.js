@@ -1,6 +1,5 @@
-// Aonyx Timer v6.1 — fixe Dorf-Ladung über am_farm/list + Fallback.
-// Läuft auf Karte & Versammlungsplatz. Echte Laufzeiten via calculate_time.
-// Du klickst selbst. Kein Auto-Send.
+// Aonyx Timer v6.1a — Hotfix: RegEx repariert.
+// Lädt Dörfer über am_farm/list, echte Laufzeiten, ms-genauer Countdown, kein Auto-Send.
 
 (function(){
   'use strict';
@@ -9,8 +8,8 @@
     return;
   }
 
-  /* ===== Utilities ===== */
-  const LS='aonyx_v61_';
+  /* ===== Utils ===== */
+  const LS='aonyx_v61a_';
   const $id=(x)=>document.getElementById(x);
   const save=(k,v)=>localStorage.setItem(LS+k,JSON.stringify(v));
   const load=(k,d=null)=>{try{const s=localStorage.getItem(LS+k);return s?JSON.parse(s):d;}catch(_){return d;}};
@@ -18,13 +17,11 @@
   const fmtHMSms=d=>`${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}.${pad3(d.getMilliseconds())}`;
   function parseTime(s){if(!s)return null;const m=s.trim().match(/^(\d{1,2})(?::?(\d{2}))?(?::?(\d{2}))?(?:\.(\d{1,3}))?$/);
     if(!m)return null;const d=new Date();d.setHours(+m[1]||0,+m[2]||0,+m[3]||0,Number((m[4]||'0').padEnd(3,'0')));return d;}
-  function maskTime(input){
-    input.addEventListener('input',()=>{const r=input.value.replace(/\D/g,'').slice(0,9);
-      let h=r.slice(0,2),m=r.slice(2,4),s=r.slice(4,6),ms=r.slice(6,9);
-      if(h.length===1)h='0'+h;if(m&&m.length===1)m='0'+m;if(s&&s.length===1)s='0'+s;
-      let o='';if(h)o+=h;if(m)o+=':'+m;if(s)o+=':'+s;if(ms)o+='.'+ms;input.value=o;});
-    input.addEventListener('blur',()=>{const d=parseTime(input.value);input.value=d?fmtHMSms(d):'';});
-  }
+  function maskTime(i){i.addEventListener('input',()=>{const r=i.value.replace(/\D/g,'').slice(0,9);
+    let h=r.slice(0,2),m=r.slice(2,4),s=r.slice(4,6),ms=r.slice(6,9);
+    if(h.length===1)h='0'+h;if(m&&m.length===1)m='0'+m;if(s&&s.length===1)s='0'+s;
+    let o='';if(h)o+=h;if(m)o+=':'+m;if(s)o+=':'+s;if(ms)o+='.'+ms;i.value=o;});
+    i.addEventListener('blur',()=>{const d=parseTime(i.value);i.value=d?fmtHMSms(d):'';});}
   const UNIT_LABEL={
     spear:'Speer',sword:'Schwert',axe:'Axt',archer:'Bogenschütze',spy:'Späher',
     light:'Leichte Kav.',marcher:'Beritt. Bogi',heavy:'Schwere Kav.',
@@ -33,7 +30,7 @@
   const allWorldUnits=()=>Array.isArray(game_data.units)&&game_data.units.length?game_data.units.slice():Object.keys(game_data.units_data||{});
 
   /* ===== UI ===== */
-  const PID='aonyx_v61_panel';
+  const PID='aonyx_v61a_panel';
   document.getElementById(PID)?.remove();
   const p=document.createElement('div');
   Object.assign(p.style,{position:'fixed',top:'10%',left:'50%',transform:'translateX(-50%)',
@@ -42,7 +39,7 @@
   p.innerHTML=`
     <div class="vis">
       <table class="vis" style="width:100%;border-bottom:1px solid #dec79b"><tr>
-        <th style="text-align:left">🦦 Aonyx Timer v6.1</th>
+        <th style="text-align:left">🦦 Aonyx Timer v6.1a</th>
         <th style="text-align:right"><button id="ax_close" class="btn">X</button></th>
       </tr></table>
       <div style="padding:8px">
@@ -108,7 +105,7 @@
     return new Promise(r=>{
       TribalWars.post('game.php',{screen:'place',ajax:'1',ajaxaction:'calculate_time',village:vid,x:tx,y:ty,unit,h:game_data.csrf},resp=>{
         try{const j=typeof resp==='string'?JSON.parse(resp):resp;const ms=j?.response?.duration||j?.data?.duration||j?.duration;r(ms?+ms:null);}
-        catch(e){const m=String(resp).match(/"duration"\\s*:\\s*(\\d+)/);r(m?+m[1]:null);}
+        catch(e){const m=String(resp).match(/"duration"\s*:\s*(\d+)/);r(m?+m[1]:null);}
       });
     });
   }
@@ -136,7 +133,7 @@
       Object.entries(u).forEach(([k,v])=>{$id(`av_${vid}_${k}`)?.textContent=v;});
     });
     document.querySelectorAll('.calc').forEach(b=>b.onclick=async()=>{
-      const vid=b.dataset.vid,unit=b.dataset.unit;const m=targetEl.value.match(/(\\d{1,3})\\|(\\d{1,3})/);
+      const vid=b.dataset.vid,unit=b.dataset.unit;const m=targetEl.value.match(/(\d{1,3})\|(\d{1,3})/);
       if(!m)return;const tx=+m[1],ty=+m[2];const c=$id(`tm_${vid}_${unit}`);if(c)c.textContent='…';
       const ms=await calcMs(vid,unit,tx,ty);if(c)c.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';
     });
@@ -148,7 +145,7 @@
 
   $id('ax_load').onclick=async()=>{VILL=await loadVillages();buildTable(VILL);};
   $id('ax_calc_all').onclick=async()=>{
-    const m=targetEl.value.match(/(\\d{1,3})\\|(\\d{1,3})/);if(!m)return;const tx=+m[1],ty=+m[2];
+    const m=targetEl.value.match(/(\d{1,3})\|(\d{1,3})/);if(!m)return;const tx=+m[1],ty=+m[2];
     for(const v of VILL){for(const u of allWorldUnits()){const c=$id(`tm_${v.id}_${u}`);if(c)c.textContent='…';
       const ms=await calcMs(v.id,u,tx,ty);if(c)c.textContent=ms?`${Math.round(ms/1000)}s`:'n/a';await new Promise(r=>setTimeout(r,50));}}
   };
@@ -172,7 +169,7 @@
     const t=parseTime(timeEl.value);if(!t){alert('Zeit ungültig');return;}
     const mode=document.querySelector('input[name=ax_mode]:checked')?.value||'attack';
     const {vid,unit}=ACTIVE;const amt=load('amt',{})[vid]?.[unit]||0;
-    const m=targetEl.value.match(/(\\d{1,3})\\|(\\d{1,3})/);if(!m)return;const tx=+m[1],ty=+m[2];
+    const m=targetEl.value.match(/(\d{1,3})\|(\d{1,3})/);if(!m)return;const tx=+m[1],ty=+m[2];
     const ms=await calcMs(vid,unit,tx,ty);if(!ms){alert('keine Laufzeit');return;}
     const sendAt=t.getTime()-ms;
     const o=document.createElement('div');Object.assign(o.style,{position:'fixed',left:'50%',top:'50%',transform:'translate(-50%,-50%)',
