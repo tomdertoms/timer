@@ -80,8 +80,19 @@
     }
   }
 
-  $('#ax_load_vills').onclick = loadVillages;
-  $('#ax_check_time').onclick = testDuration;
+document.body.appendChild(panel);
+queueMicrotask(() => {
+  const loadBtn = panel.querySelector('#ax_load_vills');
+  const timeBtn = panel.querySelector('#ax_check_time');
+  if (loadBtn && timeBtn) {
+    loadBtn.onclick = loadVillages;
+    timeBtn.onclick = testDuration;
+    console.log('[Aonyx] Buttons verbunden.');
+  } else {
+    console.warn('[Aonyx] Buttons nicht gefunden – DOM-Lag?');
+  }
+});
 
   console.log('[Aonyx] Minimal Proof geladen.');
 })();
+
